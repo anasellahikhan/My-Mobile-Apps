@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<!--
+  ============================================================
+  EXPENSE TRACKER  -  index.html
+  ============================================================
+
+  This file describes the STRUCTURE of the app: what exists on
+  screen. It contains no styling (that is app.css) and no
+  behaviour (that is app.js).
+
+  Read it top to bottom and you can see the whole screen.
+  ============================================================
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <!--
+    THE MOST IMPORTANT LINE FOR MOBILE.
+    Without it phones pretend to be a 980px-wide desktop and
+    render everything tiny. This says "use the real screen
+    width". viewport-fit=cover lets us paint under the notch.
+  -->
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+  <!-- Colours the phone's status bar to match the app -->
+  <meta name="theme-color" content="#0F1319">
+
+  <!-- Lets iOS run it fullscreen when added to the home screen -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <title>Expenses</title>
+
+  <link rel="stylesheet" href="app.css">
+  <link rel="manifest" href="manifest.json">
+
+  <!-- iOS ignores the manifest icons and uses this one -->
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+</head>
+
+<body>
+
+<!-- =========================================================
+     HEADER  -  today's spending, the number that matters most
+     ========================================================= -->
+<header class="header">
+  <div class="header-row">
+    <div>
+      <div class="label">TODAY</div>
+      <div class="today-amount" id="todayAmount">Rs 0</div>
+      <div class="today-count" id="todayCount">no expenses yet</div>
+    </div>
+    <div class="month-block">
+      <div class="label">THIS MONTH</div>
+      <div class="month-amount" id="monthAmount">Rs 0</div>
+    </div>
+  </div>
+
+  <!-- Hidden until the browser says the app can be installed -->
+  <button id="installBtn" class="install-btn hidden">
+    Add to home screen
+  </button>
+</header>
+
+
+<!-- =========================================================
+     CAPTURE  -  the whole point of the app
+     ========================================================= -->
+<main class="capture">
+
+  <!-- AMOUNT ------------------------------------------------
+       inputmode="decimal" tells the phone to open the NUMBER
+       keypad instead of the full QWERTY keyboard. One
+       attribute, and entering an amount goes from fiddly to
+       instant. This is the single most valuable mobile touch
+       in the whole file.
+  -->
+  <div class="amount-box">
+    <span class="currency">Rs</span>
+    <input id="amount"
+           class="amount-input"
+           type="text"
+           inputmode="decimal"
+           placeholder="0"
+           autocomplete="off">
+  </div>
+
+  <!-- VOICE - uses the phone's own speech engine -->
+  <button id="voiceBtn" class="voice-btn">
+    <span class="mic">&#127908;</span>
+    <span id="voiceLabel">Speak</span>
+  </button>
+  <div id="voiceHeard" class="voice-heard"></div>
+
+  <!-- CATEGORY ---------------------------------------------
+       A horizontally scrolling strip of chips. On a phone this
+       beats a dropdown: one thumb tap instead of open, scroll,
+       select, close.
+  -->
+  <div class="section-head">
+    <span class="label">CATEGORY</span>
+    <button id="manageCats" class="link-btn">Manage</button>
+  </div>
+  <div id="categoryChips" class="chips"></div>
+
+  <!-- PAYMENT ----------------------------------------------- -->
+  <div class="section-head">
+    <span class="label">PAID WITH</span>
+  </div>
+  <div id="paymentChips" class="chips"></div>
+
+  <!-- NOTE + DATE ------------------------------------------- -->
+  <input id="note"
+         class="text-input"
+         type="text"
+         placeholder="Note (optional)"
+         autocomplete="off">
+
+  <div class="date-row">
+    <input id="date" class="text-input date-input" type="date">
+    <button id="todayBtn" class="ghost-btn">Today</button>
+  </div>
+
+  <button id="saveBtn" class="save-btn">Save</button>
+
+  <div id="status" class="status"></div>
+</main>
+
+
+<!-- =========================================================
+     LIST
+     ========================================================= -->
+<section class="list-section">
+  <div class="section-head">
+    <span class="list-title">Recent</span>
+    <select id="monthFilter" class="mini-select"></select>
+  </div>
+
+  <input id="search" class="text-input search"
+         type="search" placeholder="Search...">
+
+  <div id="expenseList" class="expense-list"></div>
+</section>
+
+
+<!-- =========================================================
+     BREAKDOWN
+     ========================================================= -->
+<section class="list-section">
+  <div class="section-head">
+    <span class="list-title">Where it went</span>
+  </div>
+  <div id="breakdown" class="breakdown"></div>
+</section>
+
+<!-- =========================================================
+     BACKUP  -  your only copy lives on this device
+     ========================================================= -->
+<section class="list-section">
+  <div class="section-head">
+    <span class="list-title">Backup</span>
+  </div>
+
+  <p class="hint">
+    Everything is stored on this device only. Export before you
+    move the app to a new address, change phone, or clear your
+    browser data.
+  </p>
+
+  <div class="backup-row">
+    <button id="exportBtn" class="ghost-btn wide">Export</button>
+    <button id="importBtn" class="ghost-btn wide">Import</button>
+    <input id="importFile" type="file" accept="application/json" hidden>
+  </div>
+</section>
+
+<div class="footer-space"></div>
+
+
+<!-- =========================================================
+     CATEGORY MANAGER  -  hidden until opened
+     ========================================================= -->
+<div id="catSheet" class="sheet hidden">
+  <div class="sheet-panel">
+    <div class="sheet-head">
+      <span class="list-title">Categories</span>
+      <button id="closeCats" class="ghost-btn">Done</button>
+    </div>
+
+    <input id="newCatName" class="text-input"
+           type="text" placeholder="New category name">
+
+    <div id="colourPicker" class="colours"></div>
+
+    <button id="addCatBtn" class="save-btn small">Add category</button>
+
+    <div id="catMessage" class="status"></div>
+
+    <div id="catList" class="cat-list"></div>
+  </div>
+</div>
+
+
+<script src="voice.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
