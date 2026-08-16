@@ -749,6 +749,27 @@ async function deliverFile(filename, text, mime) {
 }
 
 
+function entryTime(expense) {
+  // When the expense was RECORDED, as HH:MM.
+  //
+  // 24-hour on purpose: a spreadsheet sorts "09:30" and "21:15"
+  // correctly as text, whereas "9:30 PM" sorts before "9:30 AM".
+  //
+  // createdAt has been written on every save since the first
+  // version, but a record restored from an old backup might not
+  // have it, so fall back to blank rather than "Invalid Date".
+  if (!expense.createdAt) return "";
+
+  const when = new Date(expense.createdAt);
+
+  if (isNaN(when.getTime())) return "";
+
+  const pad = n => String(n).padStart(2, "0");
+
+  return `${pad(when.getHours())}:${pad(when.getMinutes())}`;
+}
+
+
 function csvCell(value) {
   const text = String(value ?? "");
 
@@ -772,12 +793,13 @@ async function exportCSV() {
   }
 
   const lines = [
-    ["Date", "Amount", "Category", "Payment", "Note"].join(",")
+    ["Date", "Time", "Amount", "Category", "Payment", "Note"].join(",")
   ];
 
   rows.forEach(e => {
     lines.push([
       csvCell(e.date),
+      csvCell(entryTime(e)),
       csvCell(e.amount),
       csvCell(e.category),
       csvCell(e.payment),
@@ -788,7 +810,7 @@ async function exportCSV() {
   const total = rows.reduce((sum, e) => sum + e.amount, 0);
 
   lines.push("");
-  lines.push(["", total, "TOTAL", "", ""].join(","));
+  lines.push(["", "", total, "TOTAL", "", ""].join(","));
 
   // The BOM matters. Without it Excel opens UTF-8 as Windows-1252
   // and mangles any non-English text in your notes.
@@ -930,9 +952,23 @@ function setupInstall() {
     $("installBtn").classList.add("hidden");
   };
 
-  // Already installed and launched from the home screen
-  if (window.matchMedia("(display-mode: standalone)").matches) {
+  const installed =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true;
+
+  if (installed) {
     $("installBtn").classList.add("hidden");
+    return;
+  }
+
+  // iOS never fires beforeinstallprompt - Safari has no install
+  // API at all. Without a hint an iPhone user simply sees a web
+  // page and never discovers they can install it, so tell them
+  // where the button is.
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+  if (isIOS) {
+    $("iosHint").classList.remove("hidden");
   }
 }
 

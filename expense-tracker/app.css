@@ -127,6 +127,18 @@ input, button, select {
   cursor: pointer;
 }
 
+.ios-hint {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+  background: var(--card);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin: 16px 0 0;
+}
+
+.ios-hint strong { color: var(--text); }
+
 .month-amount {
   font-size: 17px;
   font-weight: 600;
