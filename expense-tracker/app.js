@@ -754,15 +754,24 @@ function entryTime(expense) {
   //
   // 24-hour on purpose: a spreadsheet sorts "09:30" and "21:15"
   // correctly as text, whereas "9:30 PM" sorts before "9:30 AM".
+
+  let when = expense.createdAt ? new Date(expense.createdAt) : null;
+
+  // FALLBACK: the id IS a timestamp.
   //
-  // createdAt has been written on every save since the first
-  // version, but a record restored from an old backup might not
-  // have it, so fall back to blank rather than "Invalid Date".
-  if (!expense.createdAt) return "";
+  // Ids are generated from Date.now(), so even a record saved
+  // before createdAt existed - or one restored from an old
+  // backup - still carries its creation time inside its id.
+  // Nothing has to be guessed or left blank.
+  if (!when || isNaN(when.getTime())) {
+    const id = Number(expense.id);
 
-  const when = new Date(expense.createdAt);
+    // Sanity-check it looks like a real timestamp rather than a
+    // small counter: 1e12 ms is the year 2001.
+    if (id > 1e12) when = new Date(id);
+  }
 
-  if (isNaN(when.getTime())) return "";
+  if (!when || isNaN(when.getTime())) return "";
 
   const pad = n => String(n).padStart(2, "0");
 
