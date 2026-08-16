@@ -592,6 +592,8 @@ function wireUp() {
 
   $("voiceBtn").onclick = toggleVoice;
 
+  $("csvBtn").onclick = exportCSV;
+
   $("exportBtn").onclick = exportData;
 
   $("importBtn").onclick = () => $("importFile").click();
@@ -702,7 +704,112 @@ function toggleVoice() {
    phone is lost, since nothing is stored anywhere else.
 */
 
-function exportData() {
+/*
+   DELIVERING A FILE FROM A WEB APP
+
+   A web app cannot choose where a file is saved. There is no
+   API for "put this in D:\Reports" - browsers deliberately
+   forbid it, or any web page could write anywhere on your disk.
+   Downloads go wherever the browser is configured to put them,
+   which on Android is always the Downloads folder.
+
+   On a phone the share sheet is better than a folder anyway:
+   it hands the file straight to Drive, WhatsApp, email or
+   anything else installed. So try that first, and fall back to
+   a plain download on desktop.
+*/
+async function deliverFile(filename, text, mime) {
+
+  const file = new File([text], filename, { type: mime });
+
+  // Phone: offer the share sheet
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: filename });
+      return "shared";
+    } catch (err) {
+      // User dismissed the sheet - fall through and download
+      if (err.name === "AbortError") return "cancelled";
+    }
+  }
+
+  // Desktop, or share unavailable: download it
+  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(url);
+
+  return "downloaded";
+}
+
+
+function csvCell(value) {
+  const text = String(value ?? "");
+
+  // A note containing a comma, a quote or a newline would break
+  // the columns. The CSV rule is: wrap in quotes and double any
+  // quote inside.
+  return /[",\n\r]/.test(text)
+    ? '"' + text.replace(/"/g, '""') + '"'
+    : text;
+}
+
+
+async function exportCSV() {
+  const rows = getExpenses()
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+
+  if (!rows.length) {
+    setStatus("Nothing to export yet.", "var(--warn)");
+    return;
+  }
+
+  const lines = [
+    ["Date", "Amount", "Category", "Payment", "Note"].join(",")
+  ];
+
+  rows.forEach(e => {
+    lines.push([
+      csvCell(e.date),
+      csvCell(e.amount),
+      csvCell(e.category),
+      csvCell(e.payment),
+      csvCell(e.note)
+    ].join(","));
+  });
+
+  const total = rows.reduce((sum, e) => sum + e.amount, 0);
+
+  lines.push("");
+  lines.push(["", total, "TOTAL", "", ""].join(","));
+
+  // The BOM matters. Without it Excel opens UTF-8 as Windows-1252
+  // and mangles any non-English text in your notes.
+  const csv = "\uFEFF" + lines.join("\r\n");
+
+  const result = await deliverFile(
+    `expenses-${todayISO()}.csv`, csv, "text/csv"
+  );
+
+  if (result === "cancelled") return;
+
+  setStatus(
+    result === "shared"
+      ? `Shared ${rows.length} expenses.`
+      : `Saved expenses-${todayISO()}.csv to Downloads.`,
+    "var(--good)"
+  );
+}
+
+
+async function exportData() {
   const payload = {
     version: 1,
     exportedAt: new Date().toISOString(),
@@ -710,19 +817,15 @@ function exportData() {
     categories: getCategories()
   };
 
-  const blob = new Blob([JSON.stringify(payload, null, 2)],
-                        { type: "application/json" });
+  const result = await deliverFile(
+    `expenses-backup-${todayISO()}.json`,
+    JSON.stringify(payload, null, 2),
+    "application/json"
+  );
 
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
+  if (result === "cancelled") return;
 
-  link.href = url;
-  link.download = `expenses-backup-${todayISO()}.json`;
-  link.click();
-
-  URL.revokeObjectURL(url);
-
-  setStatus(`Exported ${payload.expenses.length} expenses.`, "var(--good)");
+  setStatus(`Backed up ${payload.expenses.length} expenses.`, "var(--good)");
 }
 
 

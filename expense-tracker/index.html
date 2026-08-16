@@ -165,16 +165,30 @@
   </div>
 
   <p class="hint">
-    Everything is stored on this device only. Export before you
-    move the app to a new address, change phone, or clear your
-    browser data.
+    Everything is stored on this device only.
+  </p>
+
+  <button id="csvBtn" class="save-btn small csv">
+    Export for Excel  (.csv)
+  </button>
+
+  <p class="hint">
+    Opens in Excel or Google Sheets. On your phone this offers
+    the share sheet, so you can send it to Drive, WhatsApp or
+    email. Otherwise it lands in Downloads.
   </p>
 
   <div class="backup-row">
-    <button id="exportBtn" class="ghost-btn wide">Export</button>
-    <button id="importBtn" class="ghost-btn wide">Import</button>
+    <button id="exportBtn" class="ghost-btn wide">Backup</button>
+    <button id="importBtn" class="ghost-btn wide">Restore</button>
     <input id="importFile" type="file" accept="application/json" hidden>
   </div>
+
+  <p class="hint">
+    Backup writes a .json file for moving to a new phone or
+    address. Restore reads it back — it merges, so nothing is
+    overwritten.
+  </p>
 </section>
 
 <div class="footer-space"></div>

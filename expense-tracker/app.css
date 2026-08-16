@@ -512,6 +512,11 @@ input, button, select {
   gap: 10px;
 }
 
+.save-btn.csv {
+  background: var(--good);
+  margin-top: 10px;
+}
+
 .ghost-btn.wide {
   flex: 1;
   text-align: center;

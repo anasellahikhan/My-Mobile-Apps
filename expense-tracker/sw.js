@@ -27,7 +27,7 @@
    something.
    ============================================================ */
 
-const CACHE_NAME = "expenses-v3";
+const CACHE_NAME = "expenses-v4";
 
 // The "app shell": everything needed to draw the UI offline.
 const SHELL = [
