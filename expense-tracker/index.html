@@ -27,7 +27,10 @@
   <!-- Colours the phone's status bar to match the app -->
   <meta name="theme-color" content="#0F1319">
 
-  <!-- Lets iOS run it fullscreen when added to the home screen -->
+  <!-- Fullscreen when launched from the home screen.
+       The apple- prefixed one is deprecated but still required
+       by older iOS versions, so both are present. -->
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
