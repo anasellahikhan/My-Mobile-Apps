@@ -256,8 +256,15 @@ const $ = id => document.getElementById(id);
    STATE  -  what is currently selected
    ------------------------------------------------------------ */
 
+// How many rows a list shows before "Show more".
+// Five keeps the capture form and today's total on screen
+// without scrolling, which is the point of the whole layout.
+const PREVIEW_ROWS = 5;
+
 const state = {
   tab: "spend",
+  expandedExpenses: false,
+  expandedIncome: false,
   category: "Food",
   payment: "Cash",
   incomeSource: "Salary",
@@ -384,7 +391,11 @@ function renderList() {
     return;
   }
 
-  rows.forEach(e => {
+  const visible = state.expandedExpenses
+    ? rows
+    : rows.slice(0, PREVIEW_ROWS);
+
+  visible.forEach(e => {
     const row = document.createElement("div");
     row.className = "expense";
 
@@ -411,6 +422,45 @@ function renderList() {
 
     list.appendChild(row);
   });
+
+  addMoreButton(list, rows.length, state.expandedExpenses, () => {
+    state.expandedExpenses = !state.expandedExpenses;
+    renderList();
+  });
+}
+
+
+/* ------------------------------------------------------------
+   SHOW MORE
+   ------------------------------------------------------------
+
+   Shared by both lists so they behave identically. Collapsing
+   scrolls the list back into view - otherwise tapping "Show
+   less" on a long list leaves you stranded in empty space
+   below the page.
+*/
+function addMoreButton(container, total, expanded, onToggle) {
+
+  if (total <= PREVIEW_ROWS) return;
+
+  const button = document.createElement("button");
+  button.className = "more-btn";
+
+  button.textContent = expanded
+    ? "Show less"
+    : `Show all ${total}  (${total - PREVIEW_ROWS} more)`;
+
+  button.onclick = () => {
+    const wasExpanded = expanded;
+
+    onToggle();
+
+    if (wasExpanded) {
+      container.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+  };
+
+  container.appendChild(button);
 }
 
 
@@ -490,7 +540,11 @@ function renderIncomeList() {
     return;
   }
 
-  rows.forEach(e => {
+  const visible = state.expandedIncome
+    ? rows
+    : rows.slice(0, PREVIEW_ROWS);
+
+  visible.forEach(e => {
     const row = document.createElement("div");
     row.className = "expense";
 
@@ -511,10 +565,15 @@ function renderIncomeList() {
     row.querySelector(".expense-menu").onclick = () => {
       deleteIncome(e.id);
       renderAll();
-      setStatus("Income removed.", "var(--muted)");
+      setIncomeStatus("Income removed.", "var(--muted)");
     };
 
     list.appendChild(row);
+  });
+
+  addMoreButton(list, rows.length, state.expandedIncome, () => {
+    state.expandedIncome = !state.expandedIncome;
+    renderIncomeList();
   });
 }
 
@@ -849,11 +908,17 @@ function wireUp() {
 
   $("search").addEventListener("input", e => {
     state.search = e.target.value;
+
+    // A new search should start collapsed, or the previous
+    // "show all" leaks into unrelated results.
+    state.expandedExpenses = false;
     renderList();
   });
 
   $("monthFilter").addEventListener("change", e => {
     state.month = e.target.value;
+    state.expandedExpenses = false;
+    state.expandedIncome = false;
     renderAll();
   });
 

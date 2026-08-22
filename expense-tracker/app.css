@@ -637,3 +637,20 @@ input, button, select {
   font-weight: 700;
   margin-top: 4px;
 }
+
+
+/* ---- show more / show less ---- */
+.more-btn {
+  width: 100%;
+  min-height: var(--tap);
+  margin-top: 4px;
+  background: var(--card);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.more-btn:active { background: var(--card-hover); }
