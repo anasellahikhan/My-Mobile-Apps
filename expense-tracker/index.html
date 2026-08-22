@@ -78,6 +78,8 @@
 <!-- =========================================================
      CAPTURE  -  the whole point of the app
      ========================================================= -->
+<div id="panel-spend">
+
 <main class="capture">
 
   <!-- AMOUNT ------------------------------------------------
@@ -155,15 +157,88 @@
 </section>
 
 
+</div><!-- end panel-spend -->
+
+
 <!-- =========================================================
-     BREAKDOWN
+     INCOME  -  monthly cash income
      ========================================================= -->
-<section class="list-section">
-  <div class="section-head">
-    <span class="list-title">Where it went</span>
-  </div>
-  <div id="breakdown" class="breakdown"></div>
-</section>
+<div id="panel-income" class="hidden">
+
+  <main class="capture">
+    <div class="label">MONTHLY INCOME</div>
+
+    <div class="amount-box" style="margin-top:10px">
+      <span class="currency">Rs</span>
+      <input id="incomeAmount" class="amount-input" type="text"
+             inputmode="decimal" placeholder="0" autocomplete="off">
+    </div>
+
+    <div class="section-head"><span class="label">SOURCE</span></div>
+    <div id="incomeSourceChips" class="chips"></div>
+
+    <input id="incomeNote" class="text-input" type="text"
+           placeholder="Note (optional)" autocomplete="off">
+
+    <input id="incomeMonth" class="text-input" type="month">
+
+    <button id="saveIncomeBtn" class="save-btn income">Add income</button>
+
+    <div id="incomeStatus" class="status"></div>
+  </main>
+
+  <section class="list-section">
+    <div class="section-head">
+      <span class="list-title">Income this month</span>
+    </div>
+    <div id="incomeList" class="expense-list"></div>
+  </section>
+
+</div><!-- end panel-income -->
+
+
+<!-- =========================================================
+     INSIGHTS  -  what is actually left to spend
+     ========================================================= -->
+<div id="panel-insights" class="hidden">
+
+  <main class="capture">
+    <div class="label">SAFE TO SPEND</div>
+    <div id="insSafe" class="today-amount">-</div>
+    <div id="insSafeLabel" class="today-count"></div>
+
+    <div class="ins-bar-track">
+      <div id="insBar" class="ins-bar-fill"></div>
+    </div>
+    <div id="insBarLabel" class="hint" style="margin-top:6px"></div>
+
+    <div class="ins-grid">
+      <div class="ins-cell">
+        <div class="label">INCOME</div>
+        <div id="insIncome" class="ins-value"></div>
+      </div>
+      <div class="ins-cell">
+        <div class="label">SPENT</div>
+        <div id="insSpent" class="ins-value"></div>
+      </div>
+      <div class="ins-cell">
+        <div class="label">LEFT</div>
+        <div id="insLeft" class="ins-value"></div>
+      </div>
+    </div>
+
+    <p id="insPace" class="hint"></p>
+  </main>
+
+  <section class="list-section">
+    <div class="section-head">
+      <span class="list-title">Where it went</span>
+    </div>
+    <div id="breakdown" class="breakdown"></div>
+  </section>
+
+</div><!-- end panel-insights -->
+
 
 <!-- =========================================================
      BACKUP  -  your only copy lives on this device
@@ -226,6 +301,21 @@
   </div>
 </div>
 
+
+<!-- =========================================================
+     TABS  -  bottom bar, where a thumb can reach it
+     ========================================================= -->
+<nav class="tabbar">
+  <button id="tab-spend" class="tab active">
+    <span class="tab-icon">&#8722;</span><span>Spend</span>
+  </button>
+  <button id="tab-income" class="tab">
+    <span class="tab-icon">&#43;</span><span>Income</span>
+  </button>
+  <button id="tab-insights" class="tab">
+    <span class="tab-icon">&#9679;</span><span>Insights</span>
+  </button>
+</nav>
 
 <script src="voice.js"></script>
 <script src="app.js"></script>

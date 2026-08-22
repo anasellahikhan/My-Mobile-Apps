@@ -49,6 +49,10 @@ const PALETTE = [
 
 const KEY_EXPENSES = "expenses.v1";
 const KEY_CATEGORIES = "categories.v1";
+const KEY_INCOME = "income.v1";
+
+// Where monthly income comes from. Cash only for now, as asked.
+const INCOME_SOURCES = ["Salary", "Business", "Rent", "Gift", "Other"];
 
 
 /* ------------------------------------------------------------
@@ -114,6 +118,85 @@ function deleteExpense(id) {
   setExpenses(getExpenses().filter(e => e.id !== id));
 }
 
+/* ---- income ---- */
+
+function getIncome()  { return load(KEY_INCOME, []); }
+function setIncome(v) { save(KEY_INCOME, v); }
+
+function addIncome(record) {
+  const all = getIncome();
+
+  record.id = nextId(all);
+  record.createdAt = new Date().toISOString();
+
+  all.push(record);
+  setIncome(all);
+
+  return record.id;
+}
+
+function deleteIncome(id) {
+  setIncome(getIncome().filter(e => e.id !== id));
+}
+
+function incomeForMonth(month) {
+  return getIncome()
+    .filter(e => e.month === month)
+    .reduce((sum, e) => sum + e.amount, 0);
+}
+
+function expensesForMonth(month) {
+  return getExpenses()
+    .filter(e => monthOf(e.date) === month)
+    .reduce((sum, e) => sum + e.amount, 0);
+}
+
+
+/* ------------------------------------------------------------
+   DISPOSABLE INCOME
+   ------------------------------------------------------------
+
+   The whole point of adding income: not "what did I spend" but
+   "what can I still spend".
+
+   safePerDay is the number that actually changes behaviour. A
+   month total is abstract; "Rs 1,240 a day for the next 9 days"
+   is a decision you can make at a shop counter.
+*/
+function monthSummary(month) {
+  const income = incomeForMonth(month);
+  const spent = expensesForMonth(month);
+  const left = income - spent;
+
+  const today = new Date();
+  const isCurrentMonth = month === monthOf(todayISO());
+
+  // Days in this calendar month
+  const [year, mon] = month.split("-").map(Number);
+  const daysInMonth = new Date(year, mon, 0).getDate();
+
+  const dayOfMonth = isCurrentMonth ? today.getDate() : daysInMonth;
+  const daysLeft = isCurrentMonth
+    ? Math.max(0, daysInMonth - dayOfMonth + 1)
+    : 0;
+
+  return {
+    month,
+    income,
+    spent,
+    left,
+    daysInMonth,
+    dayOfMonth,
+    daysLeft,
+    isCurrentMonth,
+    // Guard against dividing by zero on the last day
+    safePerDay: daysLeft > 0 ? left / daysLeft : left,
+    spentPerDay: dayOfMonth > 0 ? spent / dayOfMonth : 0,
+    usedPct: income > 0 ? (spent / income) * 100 : null
+  };
+}
+
+
 function duplicateExpense(id) {
   const original = getExpenses().find(e => e.id === id);
   if (!original) return;
@@ -174,8 +257,10 @@ const $ = id => document.getElementById(id);
    ------------------------------------------------------------ */
 
 const state = {
+  tab: "spend",
   category: "Food",
   payment: "Cash",
+  incomeSource: "Salary",
   month: monthOf(todayISO()),
   search: "",
   newCatColour: PALETTE[0]
@@ -370,12 +455,166 @@ function renderBreakdown() {
 }
 
 
+/* ------------------------------------------------------------
+   INCOME + INSIGHTS RENDERING
+   ------------------------------------------------------------ */
+
+function renderIncomeChips() {
+  const box = $("incomeSourceChips");
+  box.innerHTML = "";
+
+  INCOME_SOURCES.forEach(name => {
+    const chip = document.createElement("button");
+    chip.className = "chip" + (name === state.incomeSource ? " selected" : "");
+    chip.textContent = name;
+
+    if (name === state.incomeSource) chip.style.background = "#4CAF7D";
+
+    chip.onclick = () => { state.incomeSource = name; renderIncomeChips(); };
+    box.appendChild(chip);
+  });
+}
+
+
+function renderIncomeList() {
+  const rows = getIncome()
+    .filter(e => e.month === state.month)
+    .sort((a, b) => b.id - a.id);
+
+  const list = $("incomeList");
+  list.innerHTML = "";
+
+  if (!rows.length) {
+    list.innerHTML =
+      '<div class="empty">No income recorded for this month.</div>';
+    return;
+  }
+
+  rows.forEach(e => {
+    const row = document.createElement("div");
+    row.className = "expense";
+
+    row.innerHTML = `
+      <div class="expense-bar" style="background:#4CAF7D"></div>
+      <div class="expense-main">
+        <div class="expense-title"></div>
+        <div class="expense-meta"></div>
+      </div>
+      <div class="expense-amount income">+${money(e.amount)}</div>
+      <button class="expense-menu">&#10005;</button>
+    `;
+
+    row.querySelector(".expense-title").textContent = e.source;
+    row.querySelector(".expense-meta").textContent =
+      e.note || `Cash · ${e.month}`;
+
+    row.querySelector(".expense-menu").onclick = () => {
+      deleteIncome(e.id);
+      renderAll();
+      setStatus("Income removed.", "var(--muted)");
+    };
+
+    list.appendChild(row);
+  });
+}
+
+
+function renderInsights() {
+  const s = monthSummary(state.month);
+
+  $("insIncome").textContent = "Rs " + money(s.income);
+  $("insSpent").textContent = "Rs " + money(s.spent);
+
+  const leftEl = $("insLeft");
+  leftEl.textContent = "Rs " + money(s.left);
+  leftEl.style.color = s.left < 0 ? "var(--danger)" : "var(--good)";
+
+  // progress bar of income used
+  const bar = $("insBar");
+
+  if (s.income > 0) {
+    const pct = Math.min(100, (s.spent / s.income) * 100);
+    bar.style.width = pct + "%";
+    bar.style.background =
+      pct > 100 ? "var(--danger)" :
+      pct > 85  ? "var(--warn)" : "var(--good)";
+    $("insBarLabel").textContent =
+      `${Math.round((s.spent / s.income) * 100)}% of income spent`;
+  } else {
+    bar.style.width = "0%";
+    $("insBarLabel").textContent = "Add your income to see this";
+  }
+
+  // the number that changes behaviour
+  const safe = $("insSafe");
+
+  if (s.income <= 0) {
+    safe.textContent = "—";
+    $("insSafeLabel").textContent = "Record this month's income first";
+  } else if (!s.isCurrentMonth) {
+    safe.textContent = "—";
+    $("insSafeLabel").textContent = "Only shown for the current month";
+  } else if (s.left < 0) {
+    safe.textContent = "Rs " + money(Math.abs(s.left));
+    safe.style.color = "var(--danger)";
+    $("insSafeLabel").textContent = "over budget this month";
+  } else {
+    safe.textContent = "Rs " + money(Math.floor(s.safePerDay));
+    safe.style.color = "var(--good)";
+    $("insSafeLabel").textContent =
+      `a day for the remaining ${s.daysLeft} day` +
+      (s.daysLeft === 1 ? "" : "s");
+  }
+
+  // pace: are you spending faster than income allows
+  const pace = $("insPace");
+
+  if (s.income > 0 && s.isCurrentMonth && s.dayOfMonth > 0) {
+    const projected = s.spentPerDay * s.daysInMonth;
+    const over = projected - s.income;
+
+    if (over > 0) {
+      pace.textContent =
+        `At this pace you will spend about Rs ${money(Math.round(projected))} ` +
+        `this month — Rs ${money(Math.round(over))} more than you earned.`;
+      pace.style.color = "var(--warn)";
+    } else {
+      pace.textContent =
+        `At this pace you will spend about Rs ${money(Math.round(projected))} ` +
+        `and save Rs ${money(Math.round(-over))}.`;
+      pace.style.color = "var(--muted)";
+    }
+  } else {
+    pace.textContent = "";
+  }
+}
+
+
 function renderAll() {
   renderChips();
+  renderIncomeChips();
   renderTotals();
   renderMonthFilter();
   renderList();
+  renderIncomeList();
   renderBreakdown();
+  renderInsights();
+}
+
+
+/* ------------------------------------------------------------
+   TABS
+   ------------------------------------------------------------ */
+
+function showTab(name) {
+  state.tab = name;
+
+  ["spend", "income", "insights"].forEach(tab => {
+    $("panel-" + tab).classList.toggle("hidden", tab !== name);
+    $("tab-" + tab).classList.toggle("active", tab === name);
+  });
+
+  window.scrollTo({ top: 0, behavior: "instant" });
 }
 
 
@@ -424,6 +663,51 @@ function doSave() {
 
   // A short buzz confirms the save without needing to look.
   if (navigator.vibrate) navigator.vibrate(15);
+}
+
+
+function doSaveIncome() {
+  const raw = $("incomeAmount").value.trim().replace(/,/g, "");
+
+  if (!raw) {
+    setIncomeStatus("Enter an amount.", "var(--warn)");
+    return;
+  }
+
+  const amount = parseFloat(raw);
+
+  if (isNaN(amount) || amount <= 0) {
+    setIncomeStatus("That is not a valid amount.", "var(--danger)");
+    return;
+  }
+
+  const month = $("incomeMonth").value || monthOf(todayISO());
+
+  addIncome({
+    amount: amount,
+    source: state.incomeSource,
+    note: $("incomeNote").value.trim(),
+    month: month
+  });
+
+  $("incomeAmount").value = "";
+  $("incomeNote").value = "";
+
+  state.month = month;
+
+  renderAll();
+  setIncomeStatus(
+    `Added Rs ${money(amount)} · ${state.incomeSource}`, "var(--good)"
+  );
+
+  if (navigator.vibrate) navigator.vibrate(15);
+}
+
+
+function setIncomeStatus(text, colour) {
+  const el = $("incomeStatus");
+  el.textContent = text;
+  el.style.color = colour || "var(--muted)";
 }
 
 
@@ -591,6 +875,16 @@ function wireUp() {
   $("addCatBtn").onclick = addCategory;
 
   $("voiceBtn").onclick = toggleVoice;
+
+  ["spend", "income", "insights"].forEach(tab => {
+    $("tab-" + tab).onclick = () => showTab(tab);
+  });
+
+  $("saveIncomeBtn").onclick = doSaveIncome;
+
+  $("incomeAmount").addEventListener("keydown", e => {
+    if (e.key === "Enter") doSaveIncome();
+  });
 
   $("csvBtn").onclick = exportCSV;
 
@@ -802,11 +1096,13 @@ async function exportCSV() {
   }
 
   const lines = [
-    ["Date", "Time", "Amount", "Category", "Payment", "Note"].join(",")
+    ["Type", "Date", "Time", "Amount",
+     "Category", "Payment", "Note"].join(",")
   ];
 
   rows.forEach(e => {
     lines.push([
+      "Expense",
       csvCell(e.date),
       csvCell(entryTime(e)),
       csvCell(e.amount),
@@ -816,10 +1112,32 @@ async function exportCSV() {
     ].join(","));
   });
 
-  const total = rows.reduce((sum, e) => sum + e.amount, 0);
+  // Income in the same file, tagged by Type so a spreadsheet
+  // filter or pivot can split them. Two files would mean two
+  // shares and two things to lose.
+  const incomeRows = getIncome()
+    .slice()
+    .sort((a, b) => a.month.localeCompare(b.month) || a.id - b.id);
+
+  incomeRows.forEach(e => {
+    lines.push([
+      "Income",
+      csvCell(e.month + "-01"),
+      csvCell(entryTime(e)),
+      csvCell(e.amount),
+      csvCell(e.source),
+      "Cash",
+      csvCell(e.note)
+    ].join(","));
+  });
+
+  const spent = rows.reduce((sum, e) => sum + e.amount, 0);
+  const earned = incomeRows.reduce((sum, e) => sum + e.amount, 0);
 
   lines.push("");
-  lines.push(["", "", total, "TOTAL", "", ""].join(","));
+  lines.push(["", "", "", spent, "TOTAL EXPENSES", "", ""].join(","));
+  lines.push(["", "", "", earned, "TOTAL INCOME", "", ""].join(","));
+  lines.push(["", "", "", earned - spent, "NET", "", ""].join(","));
 
   // The BOM matters. Without it Excel opens UTF-8 as Windows-1252
   // and mangles any non-English text in your notes.
@@ -842,10 +1160,11 @@ async function exportCSV() {
 
 async function exportData() {
   const payload = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     expenses: getExpenses(),
-    categories: getCategories()
+    categories: getCategories(),
+    income: getIncome()
   };
 
   const result = await deliverFile(
@@ -895,12 +1214,26 @@ function importData(file) {
       if (extra.length) setCategories(getCategories().concat(extra));
     }
 
+    // Income arrived in version 2 backups. Older files simply
+    // will not have it, which must not be treated as an error.
+    let incomeAdded = 0;
+
+    if (Array.isArray(data.income)) {
+      const existingIncome = getIncome();
+      const seenIncome = new Set(existingIncome.map(e => e.id));
+      const newIncome = data.income.filter(e => !seenIncome.has(e.id));
+
+      setIncome(existingIncome.concat(newIncome));
+      incomeAdded = newIncome.length;
+    }
+
     renderAll();
 
     const skipped = data.expenses.length - incoming.length;
 
     setStatus(
       `Imported ${incoming.length} expense(s)` +
+      (incomeAdded ? ` and ${incomeAdded} income entr(y/ies)` : "") +
       (skipped ? `, skipped ${skipped} already here.` : "."),
       "var(--good)"
     );
@@ -988,6 +1321,7 @@ function setupInstall() {
 
 function init() {
   $("date").value = todayISO();
+  $("incomeMonth").value = monthOf(todayISO());
   wireUp();
   setupVoice();
   renderAll();
