@@ -25,14 +25,14 @@
         content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
   <!-- Colours the phone's status bar to match the app -->
-  <meta name="theme-color" content="#0F1319">
+  <meta name="theme-color" content="#F1F3F7">
 
   <!-- Fullscreen when launched from the home screen.
        The apple- prefixed one is deprecated but still required
        by older iOS versions, so both are present. -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
   <title>Expenses</title>
 
@@ -146,14 +146,23 @@
      ========================================================= -->
 <section class="list-section">
   <div class="section-head">
-    <span class="list-title">Recent</span>
-    <select id="monthFilter" class="mini-select"></select>
+    <span class="list-title">This month</span>
   </div>
 
   <input id="search" class="text-input search"
          type="search" placeholder="Search...">
 
   <div id="expenseList" class="expense-list"></div>
+</section>
+
+<!-- =========================================================
+     ARCHIVE  -  one card per finished month
+     ========================================================= -->
+<section class="list-section">
+  <div class="section-head hidden" id="archiveHead">
+    <span class="list-title">Earlier months</span>
+  </div>
+  <div id="monthCards"></div>
 </section>
 
 
@@ -203,6 +212,11 @@
 <div id="panel-insights" class="hidden">
 
   <main class="capture">
+    <div class="section-head" style="margin-top:0">
+      <span class="label">MONTH</span>
+      <select id="monthFilter" class="mini-select"></select>
+    </div>
+
     <div class="label">SAFE TO SPEND</div>
     <div id="insSafe" class="today-amount">-</div>
     <div id="insSafeLabel" class="today-count"></div>
@@ -298,6 +312,24 @@
     <div id="catMessage" class="status"></div>
 
     <div id="catList" class="cat-list"></div>
+  </div>
+</div>
+
+
+<!-- =========================================================
+     MONTH DETAIL  -  a whole month, newest first
+     ========================================================= -->
+<div id="monthSheet" class="sheet hidden">
+  <div class="sheet-panel">
+    <div class="sheet-head">
+      <div>
+        <div id="monthSheetTitle" class="list-title"></div>
+        <div id="monthSheetSummary" class="hint" style="margin-top:4px"></div>
+      </div>
+      <button id="closeMonthSheet" class="ghost-btn">Close</button>
+    </div>
+
+    <div id="monthSheetList" class="expense-list"></div>
   </div>
 </div>
 

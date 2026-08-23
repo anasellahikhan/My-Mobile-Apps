@@ -1,19 +1,13 @@
 {
   "name": "Expense Tracker",
   "short_name": "Expenses",
-
   "description": "Record what you spend in five seconds. Works offline, data stays on your phone.",
-
   "start_url": "./index.html",
   "scope": "./",
-
   "display": "standalone",
-
-  "background_color": "#0F1319",
-  "theme_color": "#0F1319",
-
+  "background_color": "#F1F3F7",
+  "theme_color": "#F1F3F7",
   "orientation": "portrait",
-
   "icons": [
     {
       "src": "icons/icon-192.png",

@@ -252,6 +252,41 @@ function prettyDate(iso) {
 const $ = id => document.getElementById(id);
 
 
+function textOn(background) {
+  // Pick black or white text for a coloured chip.
+  //
+  // A fixed choice fails somewhere: white on the yellow
+  // Housing colour is unreadable, black on deep purple is
+  // worse. Relative luminance decides per colour instead of
+  // guessing once for all of them.
+  //
+  // Rather than pick a magic brightness cutoff - my first
+  // attempt used 0.55 and put white text on a pale yellow chip -
+  // work out the actual WCAG contrast ratio against black and
+  // against white, and use whichever wins. No threshold to
+  // guess, and it stays correct for any colour you add later.
+  const hex = String(background).replace("#", "");
+
+  if (hex.length !== 6) return "#FFFFFF";
+
+  const [r, g, b] = [0, 2, 4].map(i =>
+    parseInt(hex.slice(i, i + 2), 16) / 255
+  );
+
+  const channel = c =>
+    c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+
+  const luminance =
+    0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+
+  // Contrast ratio is (lighter + 0.05) / (darker + 0.05)
+  const againstWhite = 1.05 / (luminance + 0.05);
+  const againstBlack = (luminance + 0.05) / 0.05;
+
+  return againstBlack > againstWhite ? "#101418" : "#FFFFFF";
+}
+
+
 /* ------------------------------------------------------------
    STATE  -  what is currently selected
    ------------------------------------------------------------ */
@@ -300,6 +335,7 @@ function renderChips() {
 
     if (cat.name === state.category) {
       chip.style.background = cat.colour;
+      chip.style.color = textOn(cat.colour);
     }
 
     chip.onclick = () => { state.category = cat.name; renderChips(); };
@@ -376,8 +412,12 @@ function renderMonthFilter() {
 function renderList() {
   const term = state.search.toLowerCase();
 
+  // The Spend tab is always the current month. Finished months
+  // live in the archive cards below it.
+  const thisMonth = monthOf(todayISO());
+
   const rows = getExpenses()
-    .filter(e => monthOf(e.date) === state.month)
+    .filter(e => monthOf(e.date) === thisMonth)
     .filter(e => !term ||
                  (e.note || "").toLowerCase().includes(term) ||
                  e.category.toLowerCase().includes(term))
@@ -649,6 +689,141 @@ function renderInsights() {
 }
 
 
+/* ------------------------------------------------------------
+   MONTH ARCHIVE
+   ------------------------------------------------------------
+
+   The Spend tab always shows the CURRENT month, five rows deep.
+   Finished months become cards below it - tap one to read the
+   whole month.
+
+   Why not one long scrolling list: a year of spending is a
+   thousand rows. Months are how people already think about
+   money, so they are the natural unit to break it at.
+*/
+
+function monthLabel(month) {
+  const [year, mon] = month.split("-").map(Number);
+
+  return new Date(year, mon - 1, 1).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric"
+  });
+}
+
+
+function monthsWithData() {
+  const months = new Set(getExpenses().map(e => monthOf(e.date)));
+
+  getIncome().forEach(e => months.add(e.month));
+
+  return [...months].sort().reverse();
+}
+
+
+function renderMonthCards() {
+  const current = monthOf(todayISO());
+  const past = monthsWithData().filter(m => m !== current);
+
+  const box = $("monthCards");
+  box.innerHTML = "";
+
+  $("archiveHead").classList.toggle("hidden", past.length === 0);
+
+  past.forEach(month => {
+    const rows = getExpenses().filter(e => monthOf(e.date) === month);
+    const spent = rows.reduce((sum, e) => sum + e.amount, 0);
+    const earned = incomeForMonth(month);
+
+    const card = document.createElement("button");
+    card.className = "month-card";
+
+    card.innerHTML = `
+      <div class="month-card-main">
+        <div class="month-card-name"></div>
+        <div class="month-card-meta"></div>
+      </div>
+      <div class="month-card-right">
+        <div class="month-card-amount">${money(spent)}</div>
+        <div class="month-card-chev">&rsaquo;</div>
+      </div>
+    `;
+
+    card.querySelector(".month-card-name").textContent = monthLabel(month);
+
+    card.querySelector(".month-card-meta").textContent =
+      `${rows.length} expense${rows.length === 1 ? "" : "s"}` +
+      (earned > 0 ? ` · saved ${money(earned - spent)}` : "");
+
+    card.onclick = () => openMonth(month);
+
+    box.appendChild(card);
+  });
+}
+
+
+function openMonth(month) {
+  const rows = getExpenses()
+    .filter(e => monthOf(e.date) === month)
+    // Newest first, so the month reads back the way you lived it
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+
+  const spent = rows.reduce((sum, e) => sum + e.amount, 0);
+  const earned = incomeForMonth(month);
+
+  $("monthSheetTitle").textContent = monthLabel(month);
+
+  $("monthSheetSummary").textContent =
+    `Spent ${money(spent)}` +
+    (earned > 0
+      ? `  ·  Earned ${money(earned)}  ·  ${earned - spent >= 0 ? "Saved" : "Over by"} ` +
+        money(Math.abs(earned - spent))
+      : "");
+
+  const list = $("monthSheetList");
+  list.innerHTML = "";
+
+  if (!rows.length) {
+    list.innerHTML = '<div class="empty">Nothing recorded.</div>';
+  }
+
+  // Group under day headings - a bare list of 60 rows is hard to
+  // read; day breaks give it structure at no cost.
+  let lastDate = null;
+
+  rows.forEach(e => {
+    if (e.date !== lastDate) {
+      lastDate = e.date;
+
+      const heading = document.createElement("div");
+      heading.className = "day-heading";
+      heading.textContent = prettyDate(e.date);
+      list.appendChild(heading);
+    }
+
+    const row = document.createElement("div");
+    row.className = "expense";
+
+    row.innerHTML = `
+      <div class="expense-bar" style="background:${colourFor(e.category)}"></div>
+      <div class="expense-main">
+        <div class="expense-title"></div>
+        <div class="expense-meta"></div>
+      </div>
+      <div class="expense-amount">${money(e.amount)}</div>
+    `;
+
+    row.querySelector(".expense-title").textContent = e.note || e.category;
+    row.querySelector(".expense-meta").textContent =
+      `${e.category} · ${e.payment} · ${entryTime(e) || ""}`;
+
+    list.appendChild(row);
+  });
+
+  $("monthSheet").classList.remove("hidden");
+}
+
+
 function renderAll() {
   renderChips();
   renderIncomeChips();
@@ -656,6 +831,7 @@ function renderAll() {
   renderMonthFilter();
   renderList();
   renderIncomeList();
+  renderMonthCards();
   renderBreakdown();
   renderInsights();
 }
@@ -938,6 +1114,15 @@ function wireUp() {
   };
 
   $("addCatBtn").onclick = addCategory;
+
+  $("closeMonthSheet").onclick =
+    () => $("monthSheet").classList.add("hidden");
+
+  $("monthSheet").onclick = e => {
+    if (e.target.id === "monthSheet") {
+      $("monthSheet").classList.add("hidden");
+    }
+  };
 
   $("voiceBtn").onclick = toggleVoice;
 
