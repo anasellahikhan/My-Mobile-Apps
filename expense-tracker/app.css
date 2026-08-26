@@ -733,3 +733,29 @@ input, button, select {
 }
 
 .day-heading:first-child { margin-top: 4px; }
+
+
+/* ---- currency toggle ---------------------------------------
+   The symbol beside the amount IS the button. Tapping the thing
+   you want to change is more discoverable than a separate
+   control somewhere else on screen.
+*/
+.currency-btn {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--card-hover);
+  border: none;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 17px;
+  font-weight: 600;
+  padding: 6px 9px;
+  margin-right: 10px;
+  min-height: 38px;
+  cursor: pointer;
+}
+
+.currency-btn:active { background: var(--border); }
+
+.currency-caret { font-size: 10px; opacity: 0.7; }

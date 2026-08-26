@@ -90,7 +90,10 @@
        in the whole file.
   -->
   <div class="amount-box">
-    <span class="currency">Rs</span>
+    <button id="currencyBtn" class="currency-btn" title="Tap to change currency">
+      <span id="currencySymbol">Rs</span>
+      <span class="currency-caret">&#9662;</span>
+    </button>
     <input id="amount"
            class="amount-input"
            type="text"
@@ -178,7 +181,10 @@
     <div class="label">MONTHLY INCOME</div>
 
     <div class="amount-box" style="margin-top:10px">
-      <span class="currency">Rs</span>
+      <button id="currencyBtn2" class="currency-btn">
+        <span id="currencySymbol2">Rs</span>
+        <span class="currency-caret">&#9662;</span>
+      </button>
       <input id="incomeAmount" class="amount-input" type="text"
              inputmode="decimal" placeholder="0" autocomplete="off">
     </div>

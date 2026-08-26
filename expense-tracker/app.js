@@ -50,6 +50,29 @@ const PALETTE = [
 const KEY_EXPENSES = "expenses.v1";
 const KEY_CATEGORIES = "categories.v1";
 const KEY_INCOME = "income.v1";
+const KEY_CURRENCY = "currency.v1";
+
+/* ------------------------------------------------------------
+   CURRENCY
+
+   Each record stores the currency it was entered in, and totals
+   are grouped by currency rather than summed together.
+
+   Why not just swap the symbol? Because 500 PKR + 500 USD is
+   not 1,000 of anything. Someone who records in both would get
+   a confidently wrong total.
+
+   And why no conversion? Rates move daily and this app works
+   offline. A stale rate produces a number that looks precise
+   and is wrong - worse than showing two honest figures.
+------------------------------------------------------------ */
+
+const CURRENCIES = {
+  PKR: { symbol: "Rs", label: "PKR" },
+  USD: { symbol: "$",  label: "USD" }
+};
+
+const DEFAULT_CURRENCY = "PKR";
 
 // Where monthly income comes from. Cash only for now, as asked.
 const INCOME_SOURCES = ["Salary", "Business", "Rent", "Gift", "Other"];
@@ -82,6 +105,54 @@ function getCategories() {
 }
 
 function setCategories(v) { save(KEY_CATEGORIES, v); }
+
+function getCurrency() {
+  const saved = load(KEY_CURRENCY, DEFAULT_CURRENCY);
+  return CURRENCIES[saved] ? saved : DEFAULT_CURRENCY;
+}
+
+function setCurrency(code) {
+  if (CURRENCIES[code]) save(KEY_CURRENCY, code);
+}
+
+function symbolFor(code) {
+  return (CURRENCIES[code] || CURRENCIES[DEFAULT_CURRENCY]).symbol;
+}
+
+// One record's amount, with its own currency symbol
+function amountWithCurrency(record) {
+  return symbolFor(record.currency || DEFAULT_CURRENCY) +
+         " " + money(record.amount);
+}
+
+/*
+   Total a set of records, grouped by currency.
+
+   Returns "Rs 45,000" when everything is one currency, and
+   "Rs 45,000 · $120" when it is not. No fake conversion.
+*/
+function totalsByCurrency(records) {
+  const totals = {};
+
+  records.forEach(r => {
+    const code = r.currency || DEFAULT_CURRENCY;
+    totals[code] = (totals[code] || 0) + r.amount;
+  });
+
+  const codes = Object.keys(totals);
+
+  if (!codes.length) return symbolFor(getCurrency()) + " 0";
+
+  // Active currency first, so your own number leads
+  codes.sort((a, b) =>
+    a === getCurrency() ? -1 : b === getCurrency() ? 1 : a.localeCompare(b)
+  );
+
+  return codes
+    .map(code => symbolFor(code) + " " + money(totals[code]))
+    .join("  ·  ");
+}
+
 
 function colourFor(name) {
   const found = getCategories().find(c => c.name === name);
@@ -139,15 +210,28 @@ function deleteIncome(id) {
   setIncome(getIncome().filter(e => e.id !== id));
 }
 
+/*
+   Insights deliberately work in the ACTIVE currency only.
+
+   "Safe to spend per day" mixing PKR and USD would be a number
+   with no meaning. Records in the other currency are simply not
+   counted here - switch the toggle to see those instead.
+*/
 function incomeForMonth(month) {
+  const active = getCurrency();
+
   return getIncome()
     .filter(e => e.month === month)
+    .filter(e => (e.currency || DEFAULT_CURRENCY) === active)
     .reduce((sum, e) => sum + e.amount, 0);
 }
 
 function expensesForMonth(month) {
+  const active = getCurrency();
+
   return getExpenses()
     .filter(e => monthOf(e.date) === month)
+    .filter(e => (e.currency || DEFAULT_CURRENCY) === active)
     .reduce((sum, e) => sum + e.amount, 0);
 }
 
@@ -203,6 +287,7 @@ function duplicateExpense(id) {
 
   addExpense({
     amount: original.amount,
+    currency: original.currency || DEFAULT_CURRENCY,
     category: original.category,
     payment: original.payment,
     note: original.note,
@@ -377,16 +462,14 @@ function renderTotals() {
   const todayRows = all.filter(e => e.date === today);
   const todayTotal = todayRows.reduce((sum, e) => sum + e.amount, 0);
 
-  $("todayAmount").textContent = "Rs " + money(todayTotal);
+  $("todayAmount").textContent = totalsByCurrency(todayRows);
   $("todayCount").textContent =
     todayRows.length === 0 ? "no expenses yet"
     : todayRows.length + (todayRows.length === 1 ? " expense" : " expenses");
 
-  const monthTotal = all
-    .filter(e => monthOf(e.date) === state.month)
-    .reduce((sum, e) => sum + e.amount, 0);
-
-  $("monthAmount").textContent = "Rs " + money(monthTotal);
+  $("monthAmount").textContent = totalsByCurrency(
+    all.filter(e => monthOf(e.date) === monthOf(todayISO()))
+  );
 }
 
 
@@ -445,7 +528,7 @@ function renderList() {
         <div class="expense-title"></div>
         <div class="expense-meta"></div>
       </div>
-      <div class="expense-amount">${money(e.amount)}</div>
+      <div class="expense-amount">${amountWithCurrency(e)}</div>
       <button class="expense-menu">&#8942;</button>
     `;
 
@@ -594,7 +677,7 @@ function renderIncomeList() {
         <div class="expense-title"></div>
         <div class="expense-meta"></div>
       </div>
-      <div class="expense-amount income">+${money(e.amount)}</div>
+      <div class="expense-amount income">+${amountWithCurrency(e)}</div>
       <button class="expense-menu">&#10005;</button>
     `;
 
@@ -620,12 +703,13 @@ function renderIncomeList() {
 
 function renderInsights() {
   const s = monthSummary(state.month);
+  const sym = symbolFor(getCurrency());
 
-  $("insIncome").textContent = "Rs " + money(s.income);
-  $("insSpent").textContent = "Rs " + money(s.spent);
+  $("insIncome").textContent = sym + " " + money(s.income);
+  $("insSpent").textContent = sym + " " + money(s.spent);
 
   const leftEl = $("insLeft");
-  leftEl.textContent = "Rs " + money(s.left);
+  leftEl.textContent = sym + " " + money(s.left);
   leftEl.style.color = s.left < 0 ? "var(--danger)" : "var(--good)";
 
   // progress bar of income used
@@ -654,11 +738,11 @@ function renderInsights() {
     safe.textContent = "—";
     $("insSafeLabel").textContent = "Only shown for the current month";
   } else if (s.left < 0) {
-    safe.textContent = "Rs " + money(Math.abs(s.left));
+    safe.textContent = sym + " " + money(Math.abs(s.left));
     safe.style.color = "var(--danger)";
     $("insSafeLabel").textContent = "over budget this month";
   } else {
-    safe.textContent = "Rs " + money(Math.floor(s.safePerDay));
+    safe.textContent = sym + " " + money(Math.floor(s.safePerDay));
     safe.style.color = "var(--good)";
     $("insSafeLabel").textContent =
       `a day for the remaining ${s.daysLeft} day` +
@@ -674,13 +758,13 @@ function renderInsights() {
 
     if (over > 0) {
       pace.textContent =
-        `At this pace you will spend about Rs ${money(Math.round(projected))} ` +
-        `this month — Rs ${money(Math.round(over))} more than you earned.`;
+        `At this pace you will spend about ${sym} ${money(Math.round(projected))} ` +
+        `this month — ${sym} ${money(Math.round(over))} more than you earned.`;
       pace.style.color = "var(--warn)";
     } else {
       pace.textContent =
-        `At this pace you will spend about Rs ${money(Math.round(projected))} ` +
-        `and save Rs ${money(Math.round(-over))}.`;
+        `At this pace you will spend about ${sym} ${money(Math.round(projected))} ` +
+        `and save ${sym} ${money(Math.round(-over))}.`;
       pace.style.color = "var(--muted)";
     }
   } else {
@@ -744,7 +828,7 @@ function renderMonthCards() {
         <div class="month-card-meta"></div>
       </div>
       <div class="month-card-right">
-        <div class="month-card-amount">${money(spent)}</div>
+        <div class="month-card-amount">${totalsByCurrency(rows)}</div>
         <div class="month-card-chev">&rsaquo;</div>
       </div>
     `;
@@ -752,8 +836,7 @@ function renderMonthCards() {
     card.querySelector(".month-card-name").textContent = monthLabel(month);
 
     card.querySelector(".month-card-meta").textContent =
-      `${rows.length} expense${rows.length === 1 ? "" : "s"}` +
-      (earned > 0 ? ` · saved ${money(earned - spent)}` : "");
+      `${rows.length} expense${rows.length === 1 ? "" : "s"}`;
 
     card.onclick = () => openMonth(month);
 
@@ -773,11 +856,14 @@ function openMonth(month) {
 
   $("monthSheetTitle").textContent = monthLabel(month);
 
+  const sym = symbolFor(getCurrency());
+
   $("monthSheetSummary").textContent =
-    `Spent ${money(spent)}` +
+    `Spent ${totalsByCurrency(rows)}` +
     (earned > 0
-      ? `  ·  Earned ${money(earned)}  ·  ${earned - spent >= 0 ? "Saved" : "Over by"} ` +
-        money(Math.abs(earned - spent))
+      ? `  ·  Earned ${sym} ${money(earned)}  ·  ` +
+        `${earned - spent >= 0 ? "Saved" : "Over by"} ` +
+        sym + " " + money(Math.abs(earned - spent))
       : "");
 
   const list = $("monthSheetList");
@@ -810,7 +896,7 @@ function openMonth(month) {
         <div class="expense-title"></div>
         <div class="expense-meta"></div>
       </div>
-      <div class="expense-amount">${money(e.amount)}</div>
+      <div class="expense-amount">${amountWithCurrency(e)}</div>
     `;
 
     row.querySelector(".expense-title").textContent = e.note || e.category;
@@ -825,6 +911,7 @@ function openMonth(month) {
 
 
 function renderAll() {
+  renderCurrency();
   renderChips();
   renderIncomeChips();
   renderTotals();
@@ -882,6 +969,7 @@ function doSave() {
 
   addExpense({
     amount: amount,
+    currency: getCurrency(),
     category: state.category,
     payment: state.payment,
     note: $("note").value.trim(),
@@ -894,7 +982,10 @@ function doSave() {
   state.month = monthOf($("date").value || todayISO());
 
   renderAll();
-  setStatus(`Added Rs ${money(amount)} · ${state.category}`, "var(--good)");
+  setStatus(
+    `Added ${symbolFor(getCurrency())} ${money(amount)} · ${state.category}`,
+    "var(--good)"
+  );
 
   // A short buzz confirms the save without needing to look.
   if (navigator.vibrate) navigator.vibrate(15);
@@ -920,6 +1011,7 @@ function doSaveIncome() {
 
   addIncome({
     amount: amount,
+    currency: getCurrency(),
     source: state.incomeSource,
     note: $("incomeNote").value.trim(),
     month: month
@@ -932,10 +1024,31 @@ function doSaveIncome() {
 
   renderAll();
   setIncomeStatus(
-    `Added Rs ${money(amount)} · ${state.incomeSource}`, "var(--good)"
+    `Added ${symbolFor(getCurrency())} ${money(amount)} · ${state.incomeSource}`,
+    "var(--good)"
   );
 
   if (navigator.vibrate) navigator.vibrate(15);
+}
+
+
+function toggleCurrency() {
+  const codes = Object.keys(CURRENCIES);
+  const next = codes[(codes.indexOf(getCurrency()) + 1) % codes.length];
+
+  setCurrency(next);
+  renderCurrency();
+  renderAll();
+
+  setStatus(`Now recording in ${CURRENCIES[next].label}.`, "var(--muted)");
+}
+
+
+function renderCurrency() {
+  const symbol = symbolFor(getCurrency());
+
+  $("currencySymbol").textContent = symbol;
+  $("currencySymbol2").textContent = symbol;
 }
 
 
@@ -948,7 +1061,7 @@ function setIncomeStatus(text, colour) {
 
 function rowMenu(expense) {
   const choice = prompt(
-    `${expense.note || expense.category} — Rs ${money(expense.amount)}\n\n` +
+    `${expense.note || expense.category} — ${amountWithCurrency(expense)}\n\n` +
     "1 = Duplicate to today\n" +
     "2 = Delete\n\n" +
     "Enter 1 or 2 (or Cancel)"
@@ -1134,6 +1247,11 @@ function wireUp() {
 
   $("incomeAmount").addEventListener("keydown", e => {
     if (e.key === "Enter") doSaveIncome();
+  });
+
+  [["currencyBtn", "currencySymbol"],
+   ["currencyBtn2", "currencySymbol2"]].forEach(([btn]) => {
+    $(btn).onclick = toggleCurrency;
   });
 
   $("csvBtn").onclick = exportCSV;
@@ -1346,7 +1464,7 @@ async function exportCSV() {
   }
 
   const lines = [
-    ["Type", "Date", "Time", "Amount",
+    ["Type", "Date", "Time", "Currency", "Amount",
      "Category", "Payment", "Note"].join(",")
   ];
 
@@ -1355,6 +1473,7 @@ async function exportCSV() {
       "Expense",
       csvCell(e.date),
       csvCell(entryTime(e)),
+      csvCell(e.currency || DEFAULT_CURRENCY),
       csvCell(e.amount),
       csvCell(e.category),
       csvCell(e.payment),
@@ -1374,6 +1493,7 @@ async function exportCSV() {
       "Income",
       csvCell(e.month + "-01"),
       csvCell(entryTime(e)),
+      csvCell(e.currency || DEFAULT_CURRENCY),
       csvCell(e.amount),
       csvCell(e.source),
       "Cash",
@@ -1381,13 +1501,29 @@ async function exportCSV() {
     ].join(","));
   });
 
-  const spent = rows.reduce((sum, e) => sum + e.amount, 0);
-  const earned = incomeRows.reduce((sum, e) => sum + e.amount, 0);
+  // A total per currency. One combined figure across PKR and
+  // USD would be arithmetic on incompatible units.
+  const used = new Set([
+    ...rows.map(e => e.currency || DEFAULT_CURRENCY),
+    ...incomeRows.map(e => e.currency || DEFAULT_CURRENCY)
+  ]);
 
   lines.push("");
-  lines.push(["", "", "", spent, "TOTAL EXPENSES", "", ""].join(","));
-  lines.push(["", "", "", earned, "TOTAL INCOME", "", ""].join(","));
-  lines.push(["", "", "", earned - spent, "NET", "", ""].join(","));
+
+  [...used].sort().forEach(code => {
+    const spent = rows
+      .filter(e => (e.currency || DEFAULT_CURRENCY) === code)
+      .reduce((sum, e) => sum + e.amount, 0);
+
+    const earned = incomeRows
+      .filter(e => (e.currency || DEFAULT_CURRENCY) === code)
+      .reduce((sum, e) => sum + e.amount, 0);
+
+    lines.push(["", "", "", code, spent, "TOTAL EXPENSES", "", ""].join(","));
+    lines.push(["", "", "", code, earned, "TOTAL INCOME", "", ""].join(","));
+    lines.push(["", "", "", code, earned - spent, "NET", "", ""].join(","));
+    lines.push("");
+  });
 
   // The BOM matters. Without it Excel opens UTF-8 as Windows-1252
   // and mangles any non-English text in your notes.
